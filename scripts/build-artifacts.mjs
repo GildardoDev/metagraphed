@@ -606,6 +606,7 @@ for (const [netuid, subnetHealth] of healthArtifacts.subnets) {
 for (const [netuid, badge] of healthArtifacts.badges) {
   await writeJson(artifactFile(`health/badges/${netuid}.json`), badge);
 }
+coverage.completeness = buildCompletenessSummary(profileArtifacts.profiles);
 await writeJson(artifactFile("coverage.json"), coverage);
 await writeJson(artifactFile("contracts.json"), contracts);
 await writeJson(
@@ -4282,6 +4283,83 @@ function classifySubnetStatus({
     return "degraded";
   }
   return "failed";
+}
+
+// Promote the per-subnet completeness scoring into a public, explained
+// aggregate — the headline "trustworthy coverage completeness" metric. The full
+// per-subnet leaderboard stays queryable at /api/v1/profiles?sort=completeness_score
+// and /metagraph/review/profile-completeness.json.
+function buildCompletenessSummary(profiles) {
+  const scored = profiles.filter((profile) =>
+    Number.isFinite(profile.completeness_score),
+  );
+  const scores = scored.map((profile) => profile.completeness_score);
+  const count = scores.length;
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  const average = count ? Math.round(total / count) : 0;
+  const sorted = [...scores].sort((a, b) => a - b);
+  const median = count
+    ? count % 2
+      ? sorted[(count - 1) / 2]
+      : Math.round((sorted[count / 2 - 1] + sorted[count / 2]) / 2)
+    : 0;
+
+  const distribution = {
+    "0-24": 0,
+    "25-49": 0,
+    "50-74": 0,
+    "75-99": 0,
+    100: 0,
+  };
+  for (const score of scores) {
+    if (score >= 100) {
+      distribution["100"] += 1;
+    } else if (score >= 75) {
+      distribution["75-99"] += 1;
+    } else if (score >= 50) {
+      distribution["50-74"] += 1;
+    } else if (score >= 25) {
+      distribution["25-49"] += 1;
+    } else {
+      distribution["0-24"] += 1;
+    }
+  }
+
+  const fullyComplete = scored.filter(
+    (profile) => (profile.missing_critical_count || 0) === 0,
+  ).length;
+
+  const dimensions = [
+    "source-repo",
+    "website",
+    "docs",
+    "openapi",
+    "subnet-api",
+    "sse",
+    "data-artifact",
+  ];
+  const dimensionCoverage = {};
+  for (const kind of dimensions) {
+    const present = scored.filter((profile) =>
+      (profile.supported_interface_kinds || []).includes(kind),
+    ).length;
+    dimensionCoverage[kind] = {
+      present,
+      pct: count ? Math.round((present / count) * 100) : 0,
+    };
+  }
+
+  return {
+    scored_subnet_count: count,
+    average_score: average,
+    median_score: median,
+    fully_complete_count: fullyComplete,
+    fully_complete_pct: count ? Math.round((fullyComplete / count) * 100) : 0,
+    score_distribution: distribution,
+    dimension_coverage: dimensionCoverage,
+    methodology:
+      "Per-subnet completeness_score (0-100) weighs curated public identity and operational interface coverage. Full per-subnet scores and gaps live at /metagraph/review/profile-completeness.json; the sortable leaderboard is /api/v1/profiles?sort=completeness_score&order=asc.",
+  };
 }
 
 function badgeColor(status) {

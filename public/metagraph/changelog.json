@@ -3,7 +3,11 @@
     "added": [],
     "modified": [
       {
-        "hash": "462542d854c4cd0735afb71efcdbbfab76bfd5fa081ecf76342b89d6e52ae8b1",
+        "hash": "f163ae776a05c5f20185aaa7d249dc403f3e4bd5458dde282c5dfa1d10682133",
+        "path": "coverage.json"
+      },
+      {
+        "hash": "49ea2e9fb82ac6880755381c06c1e0d2632c5cc8d87709e3fdfc8db259cfc5fc",
         "path": "openapi.json"
       }
     ],
@@ -24,7 +28,7 @@
   },
   "summary": {
     "artifact_added_count": 0,
-    "artifact_modified_count": 1,
+    "artifact_modified_count": 2,
     "artifact_removed_count": 0,
     "coverage_delta": {
       "candidate_count": {

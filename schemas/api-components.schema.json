@@ -733,6 +733,53 @@
                 "minimum": 0,
                 "type": "integer"
               },
+              "completeness": {
+                "additionalProperties": true,
+                "description": "Aggregate trustworthy-coverage-completeness scoreboard derived from per-subnet completeness scores. The per-subnet leaderboard is /api/v1/profiles?sort=completeness_score.",
+                "properties": {
+                  "average_score": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "dimension_coverage": {
+                    "additionalProperties": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "type": "object"
+                  },
+                  "fully_complete_count": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "fully_complete_pct": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "median_score": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "methodology": {
+                    "type": "string"
+                  },
+                  "score_distribution": {
+                    "additionalProperties": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "object"
+                  },
+                  "scored_subnet_count": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
               "curated_overlay_count": {
                 "minimum": 0,
                 "type": "integer"

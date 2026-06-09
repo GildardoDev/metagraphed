@@ -891,6 +891,25 @@ export interface components {
             candidate_count: number;
             candidate_subnet_count: number;
             chain_subnet_count: number;
+            /** @description Aggregate trustworthy-coverage-completeness scoreboard derived from per-subnet completeness scores. The per-subnet leaderboard is /api/v1/profiles?sort=completeness_score. */
+            completeness?: {
+                average_score?: number;
+                dimension_coverage?: {
+                    [key: string]: {
+                        [key: string]: unknown;
+                    };
+                };
+                fully_complete_count?: number;
+                fully_complete_pct?: number;
+                median_score?: number;
+                methodology?: string;
+                score_distribution?: {
+                    [key: string]: number;
+                };
+                scored_subnet_count?: number;
+            } & {
+                [key: string]: unknown;
+            };
             curated_overlay_count: number;
             curation_level_counts: components["schemas"]["CountMap"];
             manifested_count: number;

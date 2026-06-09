@@ -781,6 +781,24 @@ test("public artifacts are internally consistent", () => {
   assert.equal(coverage.native_only_count, 0);
   assert.equal(coverage.candidate_count, candidates.candidates.length);
   assert.equal(coverage.candidate_subnet_count, native.subnets.length);
+  // Public completeness scoreboard (the trustworthy-coverage moat metric).
+  assert.equal(
+    coverage.completeness.scored_subnet_count,
+    profiles.profiles.length,
+  );
+  assert.ok(coverage.completeness.average_score >= 0);
+  assert.ok(coverage.completeness.average_score <= 100);
+  assert.equal(
+    typeof coverage.completeness.dimension_coverage.docs.pct,
+    "number",
+  );
+  assert.equal(
+    Object.values(coverage.completeness.score_distribution).reduce(
+      (sum, value) => sum + value,
+      0,
+    ),
+    coverage.completeness.scored_subnet_count,
+  );
   assert.equal(curation.curation.length, native.subnets.length);
   assert.equal(gaps.gaps.length, native.subnets.length);
   assert.equal(verification.candidate_count, verification.results.length);
