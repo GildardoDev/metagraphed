@@ -400,50 +400,165 @@ async function handleRpcProxyRequest(request, env, url) {
     );
   }
 
-  const poolId = url.pathname.includes("/wss") ? "finney-wss" : "finney-rpc";
+  // The proxy forwards an HTTP JSON-RPC POST, so it can only reach HTTP(S)
+  // upstreams. The /wss route points at WebSocket-only endpoints that cannot be
+  // HTTP-POSTed, so reject it with a clear error instead of failing the upstream
+  // fetch (which would surface as a 500).
+  if (url.pathname.endsWith("/wss")) {
+    return errorResponse(
+      "rpc_websocket_unsupported",
+      "WebSocket JSON-RPC is not available through this HTTP proxy. POST to /rpc/v1/finney for HTTP JSON-RPC, or connect to a public WSS endpoint directly.",
+      400,
+    );
+  }
+  const poolId = "finney-rpc";
   const pool = (poolArtifact.data.pools || []).find(
     (candidate) => candidate.id === poolId,
   );
-  const endpointSelection = selectSafeRpcEndpoint(pool);
-  if (endpointSelection.unsafeEndpoint) {
-    return errorResponse(
-      "rpc_endpoint_unsafe",
-      "Eligible RPC endpoint URL is not allowed by the Worker upstream safety policy.",
-      502,
-      {
-        endpoint_id: endpointSelection.unsafeEndpoint.id || null,
-        pool_id: poolId,
-      },
-    );
-  }
-  if (!endpointSelection.endpoint) {
+  const { endpoints: candidates, unsafeEndpoint } = orderSafeRpcEndpoints(pool);
+  if (!candidates.length) {
+    if (unsafeEndpoint) {
+      return errorResponse(
+        "rpc_endpoint_unsafe",
+        "Eligible RPC endpoint URL is not allowed by the Worker upstream safety policy.",
+        502,
+        { endpoint_id: unsafeEndpoint.id || null, pool_id: poolId },
+      );
+    }
     return errorResponse(
       "rpc_endpoint_unavailable",
       "No eligible public RPC endpoint is available for proxy routing.",
       503,
-      {
-        pool_id: poolId,
-      },
+      { pool_id: poolId },
     );
   }
 
-  const endpoint = endpointSelection.endpoint;
-  const upstream = await fetch(endpoint.url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
+  return proxyWithFailover(candidates, { bodyText, poolId });
+}
+
+const RPC_MAX_ATTEMPTS = 3;
+const RPC_ATTEMPT_TIMEOUT_MS = 6000;
+// JSON-RPC error codes that signal node trouble (retry another upstream) rather
+// than a client/application error (return immediately so we don't mask a real
+// error by trying every node).
+const TRANSIENT_RPC_ERROR_CODES = new Set([-32603]); // internal error
+
+// In-isolate circuit breaker: count consecutive transient failures per endpoint
+// and temporarily eject (deprioritise) repeat offenders. Per-isolate only (no
+// global view, resets on cold start) — cheap and enough to ride out the burst
+// that matters. RPC_HEALTH is the module-default map; injectable for tests.
+const RPC_HEALTH = new Map(); // endpointId -> { fails, ejectedUntil }
+const RPC_EJECT_THRESHOLD = 3;
+const RPC_EJECT_COOLDOWN_MS = 30_000;
+
+export function recordRpcFailure(map, id, now) {
+  const entry = map.get(id) || { fails: 0, ejectedUntil: 0 };
+  entry.fails += 1;
+  if (entry.fails >= RPC_EJECT_THRESHOLD) {
+    entry.ejectedUntil = now + RPC_EJECT_COOLDOWN_MS;
+  }
+  map.set(id, entry);
+}
+
+export function recordRpcSuccess(map, id) {
+  map.delete(id);
+}
+
+export function isRpcEndpointEjected(map, id, now) {
+  const entry = map.get(id);
+  return Boolean(entry && entry.ejectedUntil > now);
+}
+
+// Decide how to treat one upstream attempt: "transient" (fail over to the next
+// endpoint), "success"/"fatal" (return this upstream's response to the client).
+export function classifyUpstreamAttempt({ thrown, status, parsedBody }) {
+  if (thrown) return "transient"; // network error or AbortSignal timeout
+  if (status >= 500 || status === 429) return "transient";
+  if (status >= 400) return "fatal"; // upstream rejected the request itself
+  if (parsedBody && typeof parsedBody === "object" && parsedBody.error) {
+    if (TRANSIENT_RPC_ERROR_CODES.has(Number(parsedBody.error.code))) {
+      return "transient";
+    }
+  }
+  return "success";
+}
+
+// Try each ordered endpoint in turn; return the first success / non-transient
+// response, and a clean 502 only when every attempt is a transient failure.
+// Reads the body once (allowlisted read responses are small) so we can classify
+// JSON-RPC error envelopes. fetchFn injectable for tests.
+export async function proxyWithFailover(
+  orderedEndpoints,
+  {
+    bodyText,
+    poolId,
+    fetchFn = fetch,
+    maxAttempts = RPC_MAX_ATTEMPTS,
+    timeoutMs = RPC_ATTEMPT_TIMEOUT_MS,
+    healthMap = RPC_HEALTH,
+  },
+) {
+  const attempts = [];
+  const limit = Math.min(orderedEndpoints.length, maxAttempts);
+  for (let index = 0; index < limit; index += 1) {
+    const endpoint = orderedEndpoints[index];
+    let status = 0;
+    let text = "";
+    let parsedBody = null;
+    let thrown = false;
+    try {
+      const upstream = await fetchFn(endpoint.url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: bodyText,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      status = upstream.status;
+      text = await upstream.text();
+      try {
+        parsedBody = JSON.parse(text);
+      } catch {
+        parsedBody = null;
+      }
+    } catch {
+      thrown = true;
+    }
+
+    if (
+      classifyUpstreamAttempt({ thrown, status, parsedBody }) === "transient"
+    ) {
+      recordRpcFailure(healthMap, endpoint.id, Date.now());
+      attempts.push({
+        endpoint_id: endpoint.id,
+        reason: thrown ? "unreachable" : `status-${status}`,
+      });
+      continue;
+    }
+
+    // The endpoint responded (success, or an application-level error) — it is
+    // reachable, so clear any breaker state for it.
+    recordRpcSuccess(healthMap, endpoint.id);
+    const headers = apiHeaders("short");
+    headers.set("cache-control", "no-store");
+    headers.set("content-type", JSON_CONTENT_TYPE);
+    headers.set("x-metagraph-rpc-endpoint-id", endpoint.id);
+    headers.set("x-metagraph-rpc-provider", endpoint.provider);
+    headers.set("x-metagraph-rpc-attempts", String(attempts.length + 1));
+    return new Response(text, { status: status || 502, headers });
+  }
+
+  // Every attempt failed transiently. Return a fixed message — never echo an
+  // upstream error body (leak hygiene).
+  return errorResponse(
+    "rpc_upstream_unavailable",
+    "All eligible RPC upstreams failed; try again shortly.",
+    502,
+    {
+      pool_id: poolId,
+      attempts: attempts.map((a) => a.endpoint_id),
+      last_reason: attempts.at(-1)?.reason || null,
     },
-    body: bodyText,
-    signal: AbortSignal.timeout(10000),
-  });
-  const headers = apiHeaders("short");
-  headers.set("cache-control", "no-store");
-  headers.set("x-metagraph-rpc-endpoint-id", endpoint.id);
-  headers.set("x-metagraph-rpc-provider", endpoint.provider);
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers,
-  });
+  );
 }
 
 function matchRawArtifact(pathname) {
@@ -992,31 +1107,60 @@ function contractVersion(env) {
   return env.METAGRAPH_CONTRACT_VERSION || CONTRACT_VERSION;
 }
 
-// Load-balance across ALL eligible + upstream-safe endpoints rather than always
-// picking the highest-scored one, so no single upstream becomes a hotspot.
-// Returns an unsafe endpoint (for a 502) only when every eligible endpoint fails
-// the upstream safety policy, and a null endpoint when none are eligible (503).
-export function selectSafeRpcEndpoint(pool, randomFn = Math.random) {
+// Build the FULL ordered candidate list of eligible, upstream-safe, HTTP(S)
+// endpoints for the proxy to fail over across. Ordering is a weighted shuffle
+// (favour higher score, keep load spread) so failover walks best→worst without
+// always hammering one upstream. wss:// endpoints are dropped (not HTTP-
+// proxyable); a genuinely unsafe URL is reported (for a 502) only when no safe
+// endpoint exists. Circuit-breaker-ejected endpoints are deprioritised to the
+// back (never removed) so a fully-ejected pool still self-heals via half-open
+// retries. randomFn / healthMap / now injectable for tests.
+export function orderSafeRpcEndpoints(
+  pool,
+  randomFn = Math.random,
+  { healthMap = RPC_HEALTH, now = Date.now() } = {},
+) {
   const safe = [];
   let unsafeEndpoint = null;
   for (const endpoint of pool?.endpoints || []) {
     if (!endpoint?.pool_eligible) {
       continue;
     }
-    if (isSafeRpcEndpointUrl(endpoint.url)) {
-      safe.push(endpoint);
-    } else {
+    if (!isSafeRpcEndpointUrl(endpoint.url)) {
       unsafeEndpoint ||= endpoint;
+      continue;
+    }
+    // Safe origin but wss:// — not HTTP-POST-able; skip without flagging unsafe.
+    if (endpoint.url.startsWith("https://")) {
+      safe.push(endpoint);
     }
   }
 
-  if (!safe.length) {
-    return { endpoint: null, unsafeEndpoint };
+  const remaining = [...safe];
+  const shuffled = [];
+  while (remaining.length) {
+    const pick = weightedPickEndpoint(remaining, randomFn);
+    shuffled.push(pick);
+    remaining.splice(remaining.indexOf(pick), 1);
   }
+  const live = shuffled.filter(
+    (e) => !isRpcEndpointEjected(healthMap, e.id, now),
+  );
+  const ejected = shuffled.filter((e) =>
+    isRpcEndpointEjected(healthMap, e.id, now),
+  );
+  const ordered = [...live, ...ejected];
   return {
-    endpoint: weightedPickEndpoint(safe, randomFn),
-    unsafeEndpoint: null,
+    endpoints: ordered,
+    unsafeEndpoint: ordered.length ? null : unsafeEndpoint,
   };
+}
+
+// Back-compat single-pick wrapper (still used by tests): the first of the
+// weighted-ordered list.
+export function selectSafeRpcEndpoint(pool, randomFn = Math.random) {
+  const { endpoints, unsafeEndpoint } = orderSafeRpcEndpoints(pool, randomFn);
+  return { endpoint: endpoints[0] ?? null, unsafeEndpoint };
 }
 
 // Weighted-random pick favouring higher-scored (healthier/faster) endpoints,
