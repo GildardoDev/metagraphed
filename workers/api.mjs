@@ -29,10 +29,17 @@ import {
   KV_HEALTH_RPC_POOL,
   pruneHealthHistory,
   runHealthProber,
+  writeSubnetSnapshot,
 } from "../src/health-prober.mjs";
 import {
   buildGlobalHealth,
+  formatIncidents,
+  formatLeaderboards,
+  formatPercentiles,
+  formatTrajectory,
   formatTrends,
+  INCIDENT_GAP_MS,
+  LEADERBOARD_BOARDS,
   mergeFreshness,
   mergeRpcEndpoints,
   overlayRpcPoolEligibility,
@@ -58,6 +65,11 @@ const EMBEDDING_SYNC_CRON = "37 3 * * *";
 // Trend windows for /api/v1/subnets/{netuid}/health/trends.
 const HEALTH_TREND_WINDOWS = { "7d": 7, "30d": 30 };
 const TRENDS_PATH_PATTERN = /^\/api\/v1\/subnets\/(\d+)\/health\/trends$/;
+const PERCENTILES_PATH_PATTERN =
+  /^\/api\/v1\/subnets\/(\d+)\/health\/percentiles$/;
+const INCIDENTS_PATH_PATTERN = /^\/api\/v1\/subnets\/(\d+)\/health\/incidents$/;
+const TRAJECTORY_PATH_PATTERN = /^\/api\/v1\/subnets\/(\d+)\/trajectory$/;
+const ANALYTICS_WINDOWS = { "7d": 7, "30d": 30 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
@@ -136,7 +148,11 @@ export default {
 export async function handleScheduled(controller, env = {}, ctx = {}) {
   const cron = controller?.cron || "";
   if (cron === HEALTH_PRUNE_CRON) {
-    return pruneHealthHistory(env);
+    const [pruned] = await Promise.all([
+      pruneHealthHistory(env),
+      writeSubnetSnapshot(env, { readArtifact }),
+    ]);
+    return pruned;
   }
   if (cron === EMBEDDING_SYNC_CRON) {
     return runEmbeddingSync(env, { readArtifact });
@@ -200,6 +216,11 @@ export async function handleRequest(request, env = {}, ctx = {}) {
     return handleSemanticSearchRequest(request, env, url);
   }
 
+  // Registry leaderboards (D1 + registry projections; fileless-D1 pattern).
+  if (url.pathname === "/api/v1/registry/leaderboards") {
+    return handleLeaderboards(request, env, url);
+  }
+
   if (url.pathname === "/api/v1" || url.pathname.startsWith("/api/v1/")) {
     const resolved = await resolveSubnetSlugRoute(env, url);
     if (resolved.notFound) {
@@ -215,6 +236,30 @@ export async function handleRequest(request, env = {}, ctx = {}) {
     const trendsMatch = TRENDS_PATH_PATTERN.exec(resolved.url.pathname);
     if (trendsMatch) {
       return handleHealthTrends(request, env, Number(trendsMatch[1]));
+    }
+    const percentilesMatch = PERCENTILES_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (percentilesMatch) {
+      return handleHealthPercentiles(
+        request,
+        env,
+        Number(percentilesMatch[1]),
+        resolved.url,
+      );
+    }
+    const incidentsMatch = INCIDENTS_PATH_PATTERN.exec(resolved.url.pathname);
+    if (incidentsMatch) {
+      return handleHealthIncidents(
+        request,
+        env,
+        Number(incidentsMatch[1]),
+        resolved.url,
+      );
+    }
+    const trajectoryMatch = TRAJECTORY_PATH_PATTERN.exec(resolved.url.pathname);
+    if (trajectoryMatch) {
+      return handleTrajectory(request, env, Number(trajectoryMatch[1]));
     }
     return handleApiRequest(request, env, resolved.url);
   }
@@ -397,6 +442,13 @@ function renderBadgeSvg(rawLabel, rawMessage, color) {
 const SUBNET_SLUG_ROUTE_PATTERN = /^\/api\/v1\/subnets\/([^/]+)(\/.*)?$/;
 const SUBNET_SLUG_INDEX_TTL_MS = 300_000;
 let subnetSlugIndex = null; // { map: Map<slug, netuid>, builtAt }
+
+// Leaderboards re-derives a {meta, completeness} projection from the ~600 KB
+// R2 profiles.json; cache the small projection in-isolate (5 min TTL, same as
+// the slug index) so junk-query-param cache-busting can't force a full R2 read
+// + parse per request.
+const LEADERBOARD_PROFILES_TTL_MS = 300_000;
+let leaderboardProfilesCache = null; // { subnetMeta, mostComplete, builtAt }
 
 async function resolveSubnetSlugRoute(env, url, now = Date.now()) {
   const match = SUBNET_SLUG_ROUTE_PATTERN.exec(url.pathname);
@@ -582,6 +634,301 @@ async function handleHealthTrends(request, env, netuid) {
       },
     },
     "short",
+  );
+}
+
+function analyticsWindow(url) {
+  const requested = url.searchParams.get("window");
+  const label = ANALYTICS_WINDOWS[requested] ? requested : "7d";
+  return { label, days: ANALYTICS_WINDOWS[label] };
+}
+
+async function d1All(env, sql, params) {
+  const db = env.METAGRAPH_HEALTH_DB;
+  if (!db?.prepare) return [];
+  try {
+    const result = await db
+      .prepare(sql)
+      .bind(...params)
+      .all();
+    return result?.results || [];
+  } catch {
+    return [];
+  }
+}
+
+function analyticsMeta(env, artifactPath, observedAt) {
+  return {
+    artifact_path: artifactPath,
+    cache: "short",
+    contract_version: contractVersion(env),
+    generated_at: observedAt,
+    source: "live-cron-prober",
+  };
+}
+
+// p50/p95/p99 latency percentiles per surface, computed in D1.
+async function handleHealthPercentiles(request, env, netuid, url) {
+  const { label, days } = analyticsWindow(url);
+  const rows = await d1All(
+    env,
+    `WITH ranked AS (
+       SELECT surface_id, latency_ms,
+              ROW_NUMBER() OVER (PARTITION BY surface_id ORDER BY latency_ms) AS rn,
+              COUNT(*) OVER (PARTITION BY surface_id) AS cnt
+       FROM surface_checks
+       WHERE netuid = ? AND checked_at >= ? AND latency_ms IS NOT NULL
+     )
+     SELECT surface_id,
+            cnt AS samples,
+            MAX(CASE WHEN rn = CAST(0.50 * cnt AS INTEGER) + 1 THEN latency_ms END) AS p50,
+            MAX(CASE WHEN rn = CAST(0.95 * cnt AS INTEGER) + 1 THEN latency_ms END) AS p95,
+            MAX(CASE WHEN rn = CAST(0.99 * cnt AS INTEGER) + 1 THEN latency_ms END) AS p99,
+            AVG(latency_ms) AS avg_latency_ms,
+            MIN(latency_ms) AS min_latency_ms,
+            MAX(latency_ms) AS max_latency_ms
+     FROM ranked
+     GROUP BY surface_id`,
+    [netuid, Date.now() - days * DAY_MS],
+  );
+  const meta = await readHealthKv(env, KV_HEALTH_META);
+  const data = formatPercentiles({
+    netuid,
+    window: label,
+    observedAt: meta?.last_run_at || null,
+    rows,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: analyticsMeta(
+        env,
+        `/metagraph/health/percentiles/${netuid}.json`,
+        data.observed_at,
+      ),
+    },
+    "short",
+  );
+}
+
+// SLA + reconstructed downtime incidents per surface.
+async function handleHealthIncidents(request, env, netuid, url) {
+  const { label, days } = analyticsWindow(url);
+  const since = Date.now() - days * DAY_MS;
+  const [slaRows, incidentRows] = await Promise.all([
+    d1All(
+      env,
+      `SELECT surface_id, COUNT(*) AS total, SUM(ok) AS ok_count
+       FROM surface_checks
+       WHERE netuid = ? AND checked_at >= ?
+       GROUP BY surface_id`,
+      [netuid, since],
+    ),
+    // Gap-island grouping in SQL: collapse consecutive failures (gap <= the
+    // incident threshold) into one incident row. Returns one row per incident,
+    // not per failure, so a fully-dead subnet can't return a huge result set.
+    d1All(
+      env,
+      `WITH failures AS (
+         SELECT surface_id, checked_at,
+                checked_at - LAG(checked_at)
+                  OVER (PARTITION BY surface_id ORDER BY checked_at) AS gap
+         FROM surface_checks
+         WHERE netuid = ? AND checked_at >= ? AND ok = 0
+       ),
+       grouped AS (
+         SELECT surface_id, checked_at,
+                SUM(CASE WHEN gap IS NULL OR gap > ? THEN 1 ELSE 0 END)
+                  OVER (PARTITION BY surface_id ORDER BY checked_at) AS grp
+         FROM failures
+       )
+       SELECT surface_id,
+              MIN(checked_at) AS started_at,
+              MAX(checked_at) AS ended_at,
+              COUNT(*) AS failed_samples
+       FROM grouped
+       GROUP BY surface_id, grp
+       ORDER BY surface_id, started_at`,
+      [netuid, since, INCIDENT_GAP_MS],
+    ),
+  ]);
+  const meta = await readHealthKv(env, KV_HEALTH_META);
+  const data = formatIncidents({
+    netuid,
+    window: label,
+    observedAt: meta?.last_run_at || null,
+    slaRows,
+    incidentRows,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: analyticsMeta(
+        env,
+        `/metagraph/health/incidents/${netuid}.json`,
+        data.observed_at,
+      ),
+    },
+    "short",
+  );
+}
+
+// Week-over-week structural trajectory from daily snapshots.
+async function handleTrajectory(request, env, netuid) {
+  // Keep the most-recent window (DESC) — formatTrajectory re-sorts ascending.
+  // ASC + LIMIT would freeze on the oldest 400 days once history exceeds the cap.
+  const rows = await d1All(
+    env,
+    `SELECT snapshot_date, completeness_score, surface_count, endpoint_count
+     FROM subnet_snapshots
+     WHERE netuid = ?
+     ORDER BY snapshot_date DESC
+     LIMIT 400`,
+    [netuid],
+  );
+  const data = formatTrajectory({ netuid, rows });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: analyticsMeta(
+        env,
+        `/metagraph/subnets/${netuid}/trajectory.json`,
+        null,
+      ),
+    },
+    "short",
+  );
+}
+
+// Small {meta, completeness} projection over profiles.json, cached in-isolate.
+async function leaderboardProfilesProjection(env, now = Date.now()) {
+  if (
+    leaderboardProfilesCache &&
+    now - leaderboardProfilesCache.builtAt <= LEADERBOARD_PROFILES_TTL_MS
+  ) {
+    return leaderboardProfilesCache;
+  }
+  const artifact = await readArtifact(env, "/metagraph/profiles.json");
+  const profiles = artifact.ok ? artifact.data?.profiles || [] : [];
+  const subnetMeta = new Map();
+  const mostComplete = [];
+  for (const profile of profiles) {
+    if (!Number.isInteger(profile.netuid)) continue;
+    subnetMeta.set(profile.netuid, {
+      slug: profile.slug ?? null,
+      name: profile.name ?? null,
+    });
+    mostComplete.push({
+      netuid: profile.netuid,
+      slug: profile.slug ?? null,
+      name: profile.name ?? null,
+      completeness_score: profile.completeness_score ?? null,
+    });
+  }
+  const projection = { subnetMeta, mostComplete, builtAt: now };
+  // Don't cache an empty projection (failed/cold read) — retry next request.
+  if (mostComplete.length > 0) {
+    leaderboardProfilesCache = projection;
+  }
+  return projection;
+}
+
+// Registry leaderboards: healthiest / fastest-rpc / most-complete /
+// fastest-growing. Combines live D1 status with registry projections.
+async function handleLeaderboards(request, env, url) {
+  const requestedBoard = url.searchParams.get("board");
+  if (requestedBoard && !LEADERBOARD_BOARDS.includes(requestedBoard)) {
+    return errorResponse(
+      "invalid_query",
+      `Unknown board "${requestedBoard}". Valid boards: ${LEADERBOARD_BOARDS.join(", ")}.`,
+      400,
+    );
+  }
+  const limit = url.searchParams.get("limit");
+
+  const { subnetMeta, mostComplete } = await leaderboardProfilesProjection(env);
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  const [healthRows, rpcRows, growthSamples] = await Promise.all([
+    d1All(
+      env,
+      `SELECT netuid,
+              COUNT(*) AS total,
+              SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS ok_count,
+              AVG(latency_ms) AS avg_latency_ms
+       FROM surface_status
+       GROUP BY netuid`,
+      [],
+    ),
+    d1All(
+      env,
+      `SELECT netuid, MIN(latency_ms) AS min_latency_ms
+       FROM surface_status
+       WHERE kind IN ('subtensor-rpc', 'subtensor-wss')
+         AND status = 'ok' AND latency_ms IS NOT NULL
+       GROUP BY netuid`,
+      [],
+    ),
+    d1All(
+      env,
+      `SELECT netuid, snapshot_date, completeness_score
+       FROM subnet_snapshots
+       WHERE snapshot_date >= ?
+       ORDER BY netuid, snapshot_date`,
+      [sevenDaysAgo],
+    ),
+  ]);
+
+  // Per-subnet completeness delta over the window (latest - earliest sample).
+  const growthByNetuid = new Map();
+  for (const row of growthSamples) {
+    const entry = growthByNetuid.get(row.netuid) || {
+      first: undefined,
+      last: undefined,
+    };
+    // `undefined` = no row yet; a real null completeness_score must latch as the
+    // baseline so the delta guard below can drop unscored window endpoints.
+    if (entry.first === undefined) entry.first = row.completeness_score ?? null;
+    entry.last = row.completeness_score ?? null;
+    growthByNetuid.set(row.netuid, entry);
+  }
+  const growthRows = [...growthByNetuid.entries()].map(([netuid, entry]) => ({
+    netuid,
+    delta:
+      entry.first != null && entry.last != null
+        ? Number(entry.last) - Number(entry.first)
+        : null,
+  }));
+
+  const meta = await readHealthKv(env, KV_HEALTH_META);
+  const data = formatLeaderboards({
+    board: requestedBoard || null,
+    limit,
+    observedAt: meta?.last_run_at || null,
+    healthRows,
+    rpcRows,
+    mostComplete,
+    growthRows,
+    subnetMeta,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: {
+        artifact_path: "/metagraph/registry/leaderboards.json",
+        cache: "standard",
+        contract_version: contractVersion(env),
+        generated_at: data.observed_at,
+        source: "registry+live-cron-prober",
+      },
+    },
+    "standard",
   );
 }
 
