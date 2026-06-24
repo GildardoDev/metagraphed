@@ -143,6 +143,12 @@ public/metagraph/review/curation.json
 public/metagraph/review/enrichment-queue.json
 public/metagraph/review/gap-priorities.json
 public/metagraph/review/maintainer-decisions.json
+# Bulk dataset exports (CSV/JSON) — DATA-derived from the registry, regenerated +
+# served as static assets on every build/deploy. Never commit: they re-drift on
+# every data refresh and repeatedly red-lined the "fresh artifacts" gate. (The
+# CONTRACT artifacts — openapi.json / types.d.ts / contracts.json / api-index.json
+# — stay committed + gated, since those change only with reviewed schema/source PRs.)
+public/datasets/
 
 # Local/private automation implementation details
 private/
