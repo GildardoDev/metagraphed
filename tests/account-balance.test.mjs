@@ -121,7 +121,9 @@ test("GET /accounts/{ss58}/balance falls through on KV read failure", async () =
     },
   };
   await withFetchStub(
-    async () => { throw new Error("rpc down"); },
+    async () => {
+      throw new Error("rpc down");
+    },
     async () => {
       const res = await handleRequest(
         req(`/api/v1/accounts/${SS58}/balance`),
@@ -145,7 +147,7 @@ test("GET /accounts/{ss58}/balance decodes hex-encoded rao balances", async () =
         id: 1,
         result: {
           data: {
-            free: "0x77359400",   // 2_000_000_000 rao in hex
+            free: "0x77359400", // 2_000_000_000 rao in hex
             reserved: "0x1DCD6500", // 500_000_000 rao in hex
           },
         },
@@ -238,7 +240,9 @@ test("GET /accounts/{ss58}/balance tolerates KV write failure", async () => {
   const env = {
     METAGRAPH_CONTROL: {
       get: async () => null,
-      put: async () => { throw new Error("kv write error"); },
+      put: async () => {
+        throw new Error("kv write error");
+      },
     },
   };
   await withFetchStub(
