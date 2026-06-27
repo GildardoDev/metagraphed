@@ -105,8 +105,10 @@ const execFileAsync = promisify(execFile);
 // bounded-concurrency mapLimit instead of serial awaits. Safe because each write
 // targets a distinct path and atomicWriteFile isolates via a per-call mkdtemp dir.
 // Env-overridable for hosts with tight file-descriptor limits.
-const ARTIFACT_WRITE_CONCURRENCY =
-  Number(process.env.METAGRAPH_ARTIFACT_WRITE_CONCURRENCY) || 16;
+const ARTIFACT_WRITE_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.METAGRAPH_ARTIFACT_WRITE_CONCURRENCY) || 16,
+);
 
 // Freshness auto-demotion (Finding 9): an operational surface not probed healthy
 // within this many days is treated as stale and contributes a reduced share of
@@ -333,6 +335,8 @@ for (const surface of surfaces) {
   providerIdsByNetuid.get(surface.netuid).add(surface.provider);
 }
 const derivedDescriptionByNetuid = new Map();
+// serial: accumulates into derivedDescriptionByNetuid (shared state), so unlike the
+// #2057 per-subnet write loops this is intentionally not parallelized.
 for (const subnet of mergedSubnets) {
   if (subnet.description) continue;
   const ids = [...(providerIdsByNetuid.get(subnet.netuid) || [])].sort(
@@ -1649,6 +1653,8 @@ const agentCatalogIndex = [];
 const blockedAgentCatalogIndex = [];
 const agentReadinessByNetuid = new Map();
 let callableServiceCount = 0;
+// serial: accumulates shared state (callableServiceCount and the catalog index
+// arrays), so unlike the #2057 per-subnet write loops this is not parallelized.
 for (const subnet of mergedSubnets) {
   const profile = profileArtifacts.byNetuid.get(subnet.netuid) || null;
   const services = servicesByNetuid.get(subnet.netuid) || [];
