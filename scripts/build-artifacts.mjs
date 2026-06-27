@@ -101,14 +101,12 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-// #2057: the per-subnet/per-provider artifact writers are independent (each
-// targets a distinct path) but ran as serial `await writeJson` passes over
-// ~129 subnets, paying disk latency one write at a time. Batch them with
-// bounded-concurrency mapLimit (same primitive src/health-prober.mjs uses for
-// probes). Bounded, not unbounded Promise.all, to cap open file descriptors;
-// atomicWriteFile uses a unique mkdtemp dir per call, so concurrency is safe and
-// stableStringify keeps every file byte-identical regardless of write order.
-const ARTIFACT_WRITE_CONCURRENCY = 16;
+// #2057: batch the independent per-subnet/per-provider artifact writes with
+// bounded-concurrency mapLimit instead of serial awaits. Safe because each write
+// targets a distinct path and atomicWriteFile isolates via a per-call mkdtemp dir.
+// Env-overridable for hosts with tight file-descriptor limits.
+const ARTIFACT_WRITE_CONCURRENCY =
+  Number(process.env.METAGRAPH_ARTIFACT_WRITE_CONCURRENCY) || 16;
 
 // Freshness auto-demotion (Finding 9): an operational surface not probed healthy
 // within this many days is treated as stale and contributes a reduced share of
