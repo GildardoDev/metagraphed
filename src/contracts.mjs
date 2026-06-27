@@ -1959,7 +1959,7 @@ export const API_ROUTES = [
     [
       { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
-      { name: "call_module", schema: { type: "string" } },
+      { name: "call_module", schema: { type: "string", maxLength: 100 } },
     ],
     [],
   ),
@@ -1974,7 +1974,7 @@ export const API_ROUTES = [
     [
       { name: "window", schema: { type: "string", enum: ["7d", "30d"] } },
       { name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
-      { name: "call_module", schema: { type: "string" } },
+      { name: "call_module", schema: { type: "string", maxLength: 100 } },
     ],
     [],
   ),

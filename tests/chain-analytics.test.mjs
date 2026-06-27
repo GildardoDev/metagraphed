@@ -457,8 +457,11 @@ test("GET /api/v1/chain/signers scopes the leaderboard by call_module", async ()
     {},
   );
   assert.equal(res.status, 200);
-  assert.match(captured[0].sql, /AND call_module = \?/);
-  assert.ok(captured[0].params.includes("Balances"));
+  // Target the extrinsics query explicitly (not captured[0]) so the assertion
+  // holds even if a meta/KV read issues a prepare first.
+  const q = captured.find((c) => /FROM extrinsics/.test(c.sql));
+  assert.match(q.sql, /AND call_module = \?/);
+  assert.ok(q.params.includes("Balances"));
 });
 
 test("GET /api/v1/chain/fees scopes both the daily series and payers by call_module", async () => {
@@ -484,10 +487,33 @@ test("GET /api/v1/chain/fees scopes both the daily series and payers by call_mod
     {},
   );
   assert.equal(res.status, 200);
-  assert.equal(captured.length, 2); // daily series + payer list, both scoped
-  for (const q of captured) {
+  // Both extrinsics queries (daily series + payer list) are scoped; filter to
+  // them explicitly rather than assuming the captured order/count.
+  const extrinsicsQueries = captured.filter((q) =>
+    /FROM extrinsics/.test(q.sql),
+  );
+  assert.equal(extrinsicsQueries.length, 2);
+  for (const q of extrinsicsQueries) {
     assert.match(q.sql, /AND call_module = \?/);
     assert.ok(q.params.includes("SubtensorModule"));
+  }
+});
+
+test("chain signers/fees reject an over-long call_module with 400", async () => {
+  const env = createLocalArtifactEnv();
+  const long = "x".repeat(101);
+  for (const path of [
+    `/api/v1/chain/signers?call_module=${long}`,
+    `/api/v1/chain/fees?call_module=${long}`,
+  ]) {
+    const res = await handleRequest(
+      new Request(`https://api.metagraph.sh${path}`),
+      env,
+      {},
+    );
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.meta.parameter, "call_module");
   }
 });
 

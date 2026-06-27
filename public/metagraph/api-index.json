@@ -4782,6 +4782,7 @@
         {
           "name": "call_module",
           "schema": {
+            "maxLength": 100,
             "type": "string"
           }
         }
@@ -4819,6 +4820,7 @@
         {
           "name": "call_module",
           "schema": {
+            "maxLength": 100,
             "type": "string"
           }
         }

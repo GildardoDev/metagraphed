@@ -16466,6 +16466,7 @@
             "name": "call_module",
             "required": false,
             "schema": {
+              "maxLength": 100,
               "type": "string"
             }
           }
@@ -16636,6 +16637,7 @@
             "name": "call_module",
             "required": false,
             "schema": {
+              "maxLength": 100,
               "type": "string"
             }
           }

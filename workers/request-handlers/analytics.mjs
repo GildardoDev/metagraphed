@@ -147,6 +147,18 @@ function validateIntegerParam(url, parameter, min, max) {
   return null;
 }
 
+// Bound an optional free-text filter so an oversized value never reaches D1.
+function validateMaxLength(url, parameter, max) {
+  const raw = url.searchParams.get(parameter);
+  if (raw !== null && raw.length > max) {
+    return {
+      parameter,
+      message: `${parameter} must be ${max} characters or fewer.`,
+    };
+  }
+  return null;
+}
+
 let d1FallbackGeneration = 0;
 const D1_FALLBACK_ROWS = new WeakSet();
 const D1_FALLBACK_RESPONSES = new WeakSet();
@@ -792,6 +804,8 @@ export async function handleChainSigners(request, env, url, ctx = {}) {
   const limit = clampInt(url.searchParams.get("limit"), 50, 1, 100);
   // Optional pallet scope, backed by idx_extrinsics_call_module_order.
   const callModule = url.searchParams.get("call_module");
+  const callModuleError = validateMaxLength(url, "call_module", 100);
+  if (callModuleError) return analyticsQueryError(callModuleError);
   const moduleClause = callModule ? " AND call_module = ?" : "";
   return withEdgeCache(request, ctx, env, "chain-signers", async () => {
     const cutoff = Date.now() - days * DAY_MS;
@@ -845,6 +859,8 @@ export async function handleChainFees(request, env, url, ctx = {}) {
   // Optional pallet scope (applies to both the daily series and the payer list),
   // backed by idx_extrinsics_call_module_order.
   const callModule = url.searchParams.get("call_module");
+  const callModuleError = validateMaxLength(url, "call_module", 100);
+  if (callModuleError) return analyticsQueryError(callModuleError);
   const moduleClause = callModule ? " AND call_module = ?" : "";
   return withEdgeCache(request, ctx, env, "chain-fees", async () => {
     const cutoff = Date.now() - days * DAY_MS;
