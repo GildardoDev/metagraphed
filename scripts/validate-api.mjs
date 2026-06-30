@@ -186,6 +186,17 @@ const checks = [
     },
   ],
   [
+    "/api/v1/subnets/7/stake-flow?window=30d",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(body.data.window, "30d");
+      assert.equal(typeof body.data.total_staked_tao, "number");
+      assert.equal(typeof body.data.total_unstaked_tao, "number");
+      assert.equal(typeof body.data.net_flow_tao, "number");
+      assert.equal(typeof body.data.stake_events, "number");
+    },
+  ],
+  [
     "/api/v1/subnets/7/history?window=7d",
     (body) => {
       assert.equal(body.data.netuid, 7);

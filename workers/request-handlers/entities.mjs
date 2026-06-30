@@ -93,6 +93,11 @@ import {
   loadCounterpartyRelationship,
 } from "../../src/counterparties.mjs";
 import { loadSubnetTurnover } from "../../src/turnover.mjs";
+import {
+  loadSubnetStakeFlow,
+  STAKE_FLOW_WINDOWS,
+  DEFAULT_STAKE_FLOW_WINDOW,
+} from "../../src/stake-flow.mjs";
 
 const MAX_BLOCK_COUNT_FILTER = 1_000_000;
 
@@ -353,6 +358,20 @@ export function canonicalSubnetTurnoverCachePath(url) {
   return `${url.pathname}?window=${encodeURIComponent(label)}${suffix}`;
 }
 
+// Canonical edge-cache key for the subnet-stake-flow route. Only ?window= (one of
+// STAKE_FLOW_WINDOWS) changes the response; an omitted window and the explicit
+// default must share one cache slot, so canonicalize both to ?window=<default>.
+export function canonicalSubnetStakeFlowCachePath(url) {
+  const validationError = validateQueryParams(url, ["window"]);
+  if (validationError) return `${url.pathname}${url.search}`;
+  const windowParam =
+    url.searchParams.get("window") || DEFAULT_STAKE_FLOW_WINDOW;
+  if (!Object.hasOwn(STAKE_FLOW_WINDOWS, windowParam)) {
+    return `${url.pathname}${url.search}`;
+  }
+  return `${url.pathname}?window=${encodeURIComponent(windowParam)}`;
+}
+
 // Canonical edge-cache key for the subnet-metagraph route. Only
 // ?validator_permit=true changes the response; omission and =false both serve
 // the full metagraph and must share one cache slot.
@@ -441,6 +460,41 @@ export async function handleSubnetTurnover(request, env, netuid, url) {
         env,
         `/metagraph/subnets/${netuid}/turnover.json`,
         data.end_date,
+      ),
+    },
+    "short",
+  );
+}
+
+// GET /api/v1/subnets/{netuid}/stake-flow?window=7d|30d|90d: net stake flow for one
+// subnet over the window — TAO staked (StakeAdded) vs unstaked (StakeRemoved) and
+// the net, summed live from the account_events stream (idx_account_events_netuid_kind).
+// Windows are bounded by the ~90d account_events retention. Cold/absent store →
+// 200 with zeroed totals (schema-stable, never 404), mirroring the sibling routes.
+export async function handleSubnetStakeFlow(request, env, netuid, url) {
+  const validationError = validateQueryParams(url, ["window"]);
+  if (validationError) return analyticsQueryError(validationError);
+  const windowParam =
+    url.searchParams.get("window") || DEFAULT_STAKE_FLOW_WINDOW;
+  if (!Object.hasOwn(STAKE_FLOW_WINDOWS, windowParam)) {
+    return analyticsQueryError({
+      parameter: "window",
+      message: `"${windowParam}" is not a supported window. Supported: ${Object.keys(
+        STAKE_FLOW_WINDOWS,
+      ).join(", ")}.`,
+    });
+  }
+  const data = await loadSubnetStakeFlow(d1Runner(env), netuid, {
+    windowLabel: windowParam,
+  });
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        `/metagraph/subnets/${netuid}/stake-flow.json`,
+        null,
       ),
     },
     "short",

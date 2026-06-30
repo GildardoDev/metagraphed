@@ -49,6 +49,10 @@ export const SUBNET_CONCENTRATION_HISTORY_PATH_PATTERN =
 // no static file.
 export const SUBNET_TURNOVER_PATH_PATTERN =
   /^\/api\/v1\/subnets\/(\d+)\/turnover$/;
+// Net stake flow (StakeAdded vs StakeRemoved) for one subnet, summed live from the
+// account_events tier, no static file.
+export const SUBNET_STAKE_FLOW_PATH_PATTERN =
+  /^\/api\/v1\/subnets\/(\d+)\/stake-flow$/;
 export const UPTIME_PATH_PATTERN = /^\/api\/v1\/subnets\/(\d+)\/uptime$/;
 // Per-UID metagraph routes (#1304/#1305): computed live from the neurons D1 tier.
 export const SUBNET_METAGRAPH_PATH_PATTERN =

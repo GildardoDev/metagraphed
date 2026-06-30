@@ -20,6 +20,7 @@ import {
   handleSubnetConcentration,
   handleSubnetConcentrationHistory,
   handleSubnetTurnover,
+  handleSubnetStakeFlow,
   handleAccount,
   handleAccountEvents,
   handleAccountHistory,
@@ -37,6 +38,7 @@ import {
   handleExtrinsic,
   canonicalSubnetHistoryCachePath,
   canonicalSubnetTurnoverCachePath,
+  canonicalSubnetStakeFlowCachePath,
   canonicalSubnetMetagraphCachePath,
 } from "../workers/request-handlers/entities.mjs";
 
@@ -199,6 +201,7 @@ function dbWith({
   neuronDailyHistory,
   turnoverBounds,
   turnoverRows,
+  stakeFlow,
   agg,
   kinds,
   registrations,
@@ -273,6 +276,14 @@ function dbWith({
                     )
                   ) {
                     return { results: neuronDailyHistory || [] };
+                  }
+                  // Net stake flow: SUM(amount_tao) over the two stake kinds
+                  // (checked before the generic event_kind aggregate below).
+                  if (
+                    /SUM\(amount_tao\)/.test(sql) &&
+                    /event_kind IN \(\?, \?\)/.test(sql)
+                  ) {
+                    return { results: stakeFlow || [] };
                   }
                   // Account summary aggregates (order matters).
                   if (/GROUP BY event_kind/.test(sql)) {
@@ -1307,6 +1318,104 @@ describe("handleSubnetTurnover", () => {
         new URL(`https://api.metagraph.sh${raw}`),
       );
       assert.equal(key, raw);
+    });
+  });
+});
+
+describe("handleSubnetStakeFlow", () => {
+  test("rejects an unsupported query param with 400", async () => {
+    const res = await handleSubnetStakeFlow(
+      req(`/api/v1/subnets/${NETUID}/stake-flow`),
+      emptyEnv(),
+      NETUID,
+      url(`/api/v1/subnets/${NETUID}/stake-flow?bogus=1`),
+    );
+    await errorJson(res);
+  });
+
+  test("rejects an out-of-retention window with 400", async () => {
+    const res = await handleSubnetStakeFlow(
+      req(`/api/v1/subnets/${NETUID}/stake-flow`),
+      emptyEnv(),
+      NETUID,
+      url(`/api/v1/subnets/${NETUID}/stake-flow?window=1y`),
+    );
+    await errorJson(res);
+  });
+
+  test("returns schema-stable zeros on cold D1", async () => {
+    const body = await assertColdSchema(
+      handleSubnetStakeFlow,
+      req(`/api/v1/subnets/${NETUID}/stake-flow`),
+      emptyEnv(),
+      NETUID,
+      url(`/api/v1/subnets/${NETUID}/stake-flow`),
+    );
+    assert.equal(body.data.netuid, NETUID);
+    assert.equal(body.data.window, "30d");
+    assert.equal(body.data.total_staked_tao, 0);
+    assert.equal(body.data.total_unstaked_tao, 0);
+    assert.equal(body.data.net_flow_tao, 0);
+    await assertValidComponent("SubnetStakeFlowArtifact", body.data);
+    assert.equal(
+      body.meta.artifact_path,
+      `/metagraph/subnets/${NETUID}/stake-flow.json`,
+    );
+  });
+
+  test("sums StakeAdded vs StakeRemoved into net flow, bound to the netuid + both kinds", async () => {
+    const { env, captures } = dbWith({
+      stakeFlow: [
+        { event_kind: "StakeAdded", total_tao: 200, event_count: 5 },
+        { event_kind: "StakeRemoved", total_tao: 50, event_count: 2 },
+      ],
+    });
+    const body = await json(
+      await handleSubnetStakeFlow(
+        req(`/api/v1/subnets/${NETUID}/stake-flow`),
+        env,
+        NETUID,
+        url(`/api/v1/subnets/${NETUID}/stake-flow?window=90d`),
+      ),
+    );
+    assert.equal(body.data.netuid, NETUID);
+    assert.equal(body.data.window, "90d");
+    assert.equal(body.data.total_staked_tao, 200);
+    assert.equal(body.data.total_unstaked_tao, 50);
+    assert.equal(body.data.net_flow_tao, 150);
+    assert.equal(body.data.stake_events, 5);
+    assert.equal(body.data.unstake_events, 2);
+    await assertValidComponent("SubnetStakeFlowArtifact", body.data);
+    const idx = captures.sql.findIndex((s) =>
+      /FROM account_events WHERE netuid = \? AND event_kind IN/.test(s),
+    );
+    assert.ok(idx !== -1);
+    assert.equal(captures.params[idx][0], NETUID);
+    assert.equal(captures.params[idx][1], "StakeAdded");
+    assert.equal(captures.params[idx][2], "StakeRemoved");
+  });
+
+  describe("canonicalSubnetStakeFlowCachePath", () => {
+    test("canonicalizes omitted and explicit default window to one cache key", () => {
+      const omitted = canonicalSubnetStakeFlowCachePath(
+        new URL("https://api.metagraph.sh/api/v1/subnets/7/stake-flow"),
+      );
+      const explicit = canonicalSubnetStakeFlowCachePath(
+        new URL(
+          "https://api.metagraph.sh/api/v1/subnets/7/stake-flow?window=30d",
+        ),
+      );
+      assert.equal(omitted, explicit);
+      assert.equal(omitted, "/api/v1/subnets/7/stake-flow?window=30d");
+    });
+
+    test("passes an invalid window through unchanged (the handler rejects it)", () => {
+      const path = canonicalSubnetStakeFlowCachePath(
+        new URL(
+          "https://api.metagraph.sh/api/v1/subnets/7/stake-flow?window=bogus",
+        ),
+      );
+      assert.equal(path, "/api/v1/subnets/7/stake-flow?window=bogus");
     });
   });
 });

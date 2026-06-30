@@ -72,6 +72,8 @@ import {
   canonicalSubnetConcentrationHistoryCachePath,
   handleSubnetTurnover,
   canonicalSubnetTurnoverCachePath,
+  handleSubnetStakeFlow,
+  canonicalSubnetStakeFlowCachePath,
   canonicalSubnetMetagraphCachePath,
   handleAccount,
   handleAccountHistory,
@@ -243,6 +245,7 @@ import {
   SUBNET_CONCENTRATION_PATH_PATTERN,
   SUBNET_CONCENTRATION_HISTORY_PATH_PATTERN,
   SUBNET_TURNOVER_PATH_PATTERN,
+  SUBNET_STAKE_FLOW_PATH_PATTERN,
   TRENDS_PATH_PATTERN,
   UPTIME_PATH_PATTERN,
   WEBHOOK_SUBSCRIPTION_TOKEN_HEADER,
@@ -1292,6 +1295,27 @@ export async function handleRequest(request, env = {}, ctx = {}) {
             resolved.url,
           ),
         canonicalSubnetTurnoverCachePath(resolved.url),
+      );
+    }
+    const stakeFlowMatch = SUBNET_STAKE_FLOW_PATH_PATTERN.exec(
+      resolved.url.pathname,
+    );
+    if (stakeFlowMatch) {
+      // Net stake flow summed live from account_events over the window —
+      // deterministic per request, edge-cache like the sibling analytics routes.
+      return withEdgeCache(
+        request,
+        ctx,
+        env,
+        "subnet-stake-flow",
+        () =>
+          handleSubnetStakeFlow(
+            request,
+            env,
+            Number(stakeFlowMatch[1]),
+            resolved.url,
+          ),
+        canonicalSubnetStakeFlowCachePath(resolved.url),
       );
     }
     // Per-UID metagraph (#1304/#1305): computed live from the neurons D1 tier.
