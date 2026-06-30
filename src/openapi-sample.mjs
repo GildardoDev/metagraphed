@@ -188,9 +188,59 @@ function normalizeAccountCounterpartiesSample(out) {
   return out;
 }
 
+function normalizeSubnetYieldSample(out) {
+  if (
+    !out ||
+    typeof out !== "object" ||
+    !("subnet_yield" in out) ||
+    !("median_yield" in out) ||
+    !("p25_yield" in out) ||
+    !Array.isArray(out.neurons)
+  ) {
+    return out;
+  }
+  // A two-neuron, internally consistent worked example: a validator earning 0.2 and a
+  // miner earning 0.4 emission-per-stake. The derived distribution (subnet aggregate
+  // 4/15, mean 0.3, median/percentiles) and the per-UID vs-median labels all line up —
+  // the generic per-field generator cannot satisfy yield = emission/stake on its own.
+  out.neurons = [
+    {
+      uid: 1,
+      hotkey: SAMPLE_SS58,
+      role: "miner",
+      stake_tao: 5,
+      emission_tao: 2,
+      yield: 0.4,
+      vs_median: "above",
+    },
+    {
+      uid: 0,
+      hotkey: SAMPLE_SS58,
+      role: "validator",
+      stake_tao: 10,
+      emission_tao: 2,
+      yield: 0.2,
+      vs_median: "at",
+    },
+  ];
+  out.neuron_count = 2;
+  out.validator_count = 1;
+  out.miner_count = 1;
+  out.total_stake_tao = 15;
+  out.total_emission_tao = 4;
+  out.subnet_yield = 0.266666667;
+  out.mean_yield = 0.3;
+  out.median_yield = 0.2;
+  out.p25_yield = 0.2;
+  out.p75_yield = 0.4;
+  out.p90_yield = 0.4;
+  return out;
+}
+
 function normalizeObjectSample(out) {
   normalizeCounterpartyRelationshipSample(out);
   normalizeAccountCounterpartiesSample(out);
+  normalizeSubnetYieldSample(out);
   return out;
 }
 

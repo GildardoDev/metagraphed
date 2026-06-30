@@ -44,6 +44,7 @@ import {
   loadSubnetValidators,
   loadNeuron,
 } from "../../src/metagraph-neurons.mjs";
+import { loadSubnetYield } from "../../src/subnet-yield.mjs";
 import {
   buildNeuronHistory,
   buildSubnetHistory,
@@ -178,6 +179,28 @@ export async function handleSubnetMetagraph(request, env, netuid, url) {
       meta: await metagraphMeta(
         env,
         `/metagraph/subnets/${netuid}/metagraph.json`,
+        data.captured_at,
+      ),
+    },
+    "short",
+  );
+}
+
+// GET /api/v1/subnets/{netuid}/yield: per-UID emission yield (emission/stake) over the
+// current neurons snapshot, ranked, with a distribution summary (subnet aggregate yield,
+// mean, p25/median/p75/p90), a validator/miner split, and a per-UID vs-median label.
+// neurons-tier (source "metagraph-snapshot"). Cold/absent store → schema-stable empties.
+export async function handleSubnetYield(request, env, netuid, url) {
+  const validationError = validateQueryParams(url, []);
+  if (validationError) return analyticsQueryError(validationError);
+  const data = await loadSubnetYield(d1Runner(env), netuid);
+  return envelopeResponse(
+    request,
+    {
+      data,
+      meta: await metagraphMeta(
+        env,
+        `/metagraph/subnets/${netuid}/yield.json`,
         data.captured_at,
       ),
     },

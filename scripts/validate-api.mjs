@@ -248,6 +248,16 @@ const checks = [
     },
   ],
   [
+    "/api/v1/subnets/7/yield",
+    (body) => {
+      assert.equal(body.data.netuid, 7);
+      assert.equal(Array.isArray(body.data.neurons), true);
+      assert.equal(typeof body.data.neuron_count, "number");
+      assert.equal(typeof body.data.validator_count, "number");
+      assert.equal(typeof body.data.miner_count, "number");
+    },
+  ],
+  [
     "/api/v1/subnets/7/events",
     (body) => {
       assert.equal(body.data.netuid, 7);
