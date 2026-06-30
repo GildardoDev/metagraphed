@@ -4198,7 +4198,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** @enum {unknown} */
-            status: "captured" | "error" | "not-found" | "too-large" | "unsafe";
+            status: "captured" | "error" | "not-captured" | "not-found" | "too-large" | "unsafe";
             subnet_slug?: string;
             surface_id: string;
             /** Format: uri */
