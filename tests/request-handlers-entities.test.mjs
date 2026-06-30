@@ -1406,9 +1406,10 @@ describe("handleSubnetStakeFlow", () => {
     assert.equal(captures.params[idx][0], NETUID);
     assert.equal(captures.params[idx][1], "StakeAdded");
     assert.equal(captures.params[idx][2], "StakeRemoved");
-    // Provenance: account_events source + generated_at = newest event in the window.
+    // Provenance: account_events source + generated_at = newest event in the window
+    // as an ISO string (string|null per the envelope contract).
     assert.equal(body.meta.source, "chain-events");
-    assert.equal(body.meta.generated_at, 1717900000000);
+    assert.equal(body.meta.generated_at, new Date(1717900000000).toISOString());
   });
 
   describe("canonicalSubnetStakeFlowCachePath", () => {

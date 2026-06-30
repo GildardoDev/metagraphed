@@ -141,8 +141,8 @@ describe("loadSubnetStakeFlow", () => {
     assert.equal(data.netuid, 7);
     assert.equal(data.window, "30d");
     assert.equal(data.net_flow_tao, 150);
-    // generated_at = the newest event timestamp across both kinds.
-    assert.equal(generatedAt, 1717900000000);
+    // generated_at = the newest event's observed_at, rendered as an ISO string.
+    assert.equal(generatedAt, new Date(1717900000000).toISOString());
     vi.useRealTimers();
   });
 

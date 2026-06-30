@@ -40,6 +40,13 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// Convert an epoch-ms timestamp to an ISO string, or null when not finite. The
+// REST meta.generated_at is string|null per the envelope contract, so the newest
+// event's epoch-ms observed_at is rendered the same way account-events does (toIso).
+function toIso(ms) {
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
 // Shape a subnet's StakeAdded/StakeRemoved aggregate into a stake-flow scorecard.
 // `rows` is the GROUP BY event_kind result: at most one row per kind carrying
 // total_tao (SUM amount_tao) and event_count (COUNT). Null-safe: no rows (cold
@@ -80,9 +87,9 @@ export function buildStakeFlow(rows, netuid, { window } = {}) {
 // grouped by kind, shaped with buildStakeFlow. The (netuid, event_kind) prefix of
 // idx_account_events_netuid_kind (migrations/0024) seeks the two stake kinds; the
 // observed_at window is a residual filter on that seek. Returns { data, generatedAt }
-// where generatedAt is the newest event timestamp (epoch ms) in the window, so the
-// REST meta reports provenance tied to the account_events stream. Cold/absent D1 ->
-// zeroed totals + generatedAt null.
+// where generatedAt is the newest event's observed_at as an ISO string (string|null
+// per the envelope contract), so the REST meta reports provenance tied to the
+// account_events stream. Cold/absent D1 -> zeroed totals + generatedAt null.
 export async function loadSubnetStakeFlow(
   d1,
   netuid,
@@ -100,18 +107,18 @@ export async function loadSubnetStakeFlow(
       "GROUP BY event_kind",
     [netuid, STAKE_ADDED_KIND, STAKE_REMOVED_KIND, cutoff],
   );
-  let generatedAt = null;
+  let latestObserved = null;
   for (const row of Array.isArray(rows) ? rows : []) {
     const observed = Number(row?.last_observed);
     if (
       Number.isFinite(observed) &&
-      (generatedAt == null || observed > generatedAt)
+      (latestObserved == null || observed > latestObserved)
     ) {
-      generatedAt = observed;
+      latestObserved = observed;
     }
   }
   return {
     data: buildStakeFlow(rows, netuid, { window: windowLabel }),
-    generatedAt,
+    generatedAt: toIso(latestObserved),
   };
 }

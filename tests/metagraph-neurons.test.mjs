@@ -338,9 +338,9 @@ describe("metagraph routes (#1304/#1305) via the Worker", () => {
     assert.equal(body.data.total_staked_tao, 300);
     assert.equal(body.data.total_unstaked_tao, 100);
     assert.equal(body.data.net_flow_tao, 200);
-    // account_events provenance + newest event timestamp in the window.
+    // account_events provenance + newest event timestamp (ISO string) in the window.
     assert.equal(body.meta.source, "chain-events");
-    assert.equal(body.meta.generated_at, 1717900000000);
+    assert.equal(body.meta.generated_at, new Date(1717900000000).toISOString());
   });
 
   test("GET /subnets/{n}/validators returns only validators", async () => {
