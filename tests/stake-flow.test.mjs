@@ -112,15 +112,28 @@ describe("loadSubnetStakeFlow", () => {
     const d1 = async (sql, params) => {
       calls.push({ sql, params });
       return [
-        { event_kind: STAKE_ADDED_KIND, total_tao: 200, event_count: 5 },
-        { event_kind: STAKE_REMOVED_KIND, total_tao: 50, event_count: 2 },
+        {
+          event_kind: STAKE_ADDED_KIND,
+          total_tao: 200,
+          event_count: 5,
+          last_observed: 1717000000000,
+        },
+        {
+          event_kind: STAKE_REMOVED_KIND,
+          total_tao: 50,
+          event_count: 2,
+          last_observed: 1717900000000,
+        },
       ];
     };
-    const data = await loadSubnetStakeFlow(d1, 7, { windowLabel: "30d" });
+    const { data, generatedAt } = await loadSubnetStakeFlow(d1, 7, {
+      windowLabel: "30d",
+    });
     assert.equal(calls.length, 1);
     const { sql, params } = calls[0];
     assert.match(sql, /FROM account_events/);
     assert.match(sql, /GROUP BY event_kind/);
+    assert.match(sql, /MAX\(observed_at\)/);
     assert.equal(params[0], 7);
     assert.equal(params[1], STAKE_ADDED_KIND);
     assert.equal(params[2], STAKE_REMOVED_KIND);
@@ -128,6 +141,8 @@ describe("loadSubnetStakeFlow", () => {
     assert.equal(data.netuid, 7);
     assert.equal(data.window, "30d");
     assert.equal(data.net_flow_tao, 150);
+    // generated_at = the newest event timestamp across both kinds.
+    assert.equal(generatedAt, 1717900000000);
     vi.useRealTimers();
   });
 
@@ -139,18 +154,21 @@ describe("loadSubnetStakeFlow", () => {
       captured = params;
       return [];
     };
-    const data = await loadSubnetStakeFlow(d1, 1, {});
+    const { data } = await loadSubnetStakeFlow(d1, 1, {});
     assert.equal(data.window, DEFAULT_STAKE_FLOW_WINDOW);
     assert.equal(captured[3], Date.now() - STAKE_FLOW_WINDOWS["30d"] * DAY_MS);
     vi.useRealTimers();
   });
 
-  test("cold D1 (no rows) yields zeroed totals", async () => {
+  test("cold D1 (no rows) yields zeroed totals and a null generated_at", async () => {
     const d1 = async () => [];
-    const data = await loadSubnetStakeFlow(d1, 99, { windowLabel: "7d" });
+    const { data, generatedAt } = await loadSubnetStakeFlow(d1, 99, {
+      windowLabel: "7d",
+    });
     assert.equal(data.total_staked_tao, 0);
     assert.equal(data.total_unstaked_tao, 0);
     assert.equal(data.net_flow_tao, 0);
     assert.equal(data.window, "7d");
+    assert.equal(generatedAt, null);
   });
 });

@@ -484,17 +484,24 @@ export async function handleSubnetStakeFlow(request, env, netuid, url) {
       ).join(", ")}.`,
     });
   }
-  const data = await loadSubnetStakeFlow(d1Runner(env), netuid, {
-    windowLabel: windowParam,
-  });
+  const { data, generatedAt } = await loadSubnetStakeFlow(
+    d1Runner(env),
+    netuid,
+    {
+      windowLabel: windowParam,
+    },
+  );
+  // account_events-derived, so the meta reports source "chain-events" (via
+  // accountMeta), not the metagraph snapshot; generated_at is the newest event in
+  // the window.
   return envelopeResponse(
     request,
     {
       data,
-      meta: await metagraphMeta(
+      meta: await accountMeta(
         env,
         `/metagraph/subnets/${netuid}/stake-flow.json`,
-        null,
+        generatedAt,
       ),
     },
     "short",

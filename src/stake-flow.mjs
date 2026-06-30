@@ -49,14 +49,16 @@ export function buildStakeFlow(rows, netuid, { window } = {}) {
   let unstakedTao = 0;
   let stakeEvents = 0;
   let unstakeEvents = 0;
+  // Accumulate per kind so the shaper is robust to more than one row per kind,
+  // not just the single-row-per-kind shape GROUP BY event_kind guarantees.
   for (const row of list) {
     const kind = row?.event_kind;
     if (kind === STAKE_ADDED_KIND) {
-      stakedTao = toNumber(row?.total_tao);
-      stakeEvents = toNumber(row?.event_count);
+      stakedTao += toNumber(row?.total_tao);
+      stakeEvents += toNumber(row?.event_count);
     } else if (kind === STAKE_REMOVED_KIND) {
-      unstakedTao = toNumber(row?.total_tao);
-      unstakeEvents = toNumber(row?.event_count);
+      unstakedTao += toNumber(row?.total_tao);
+      unstakeEvents += toNumber(row?.event_count);
     }
   }
   return {
@@ -76,7 +78,10 @@ export function buildStakeFlow(rows, netuid, { window } = {}) {
 // account_events over the window (observed_at >= now - windowDays, epoch ms),
 // grouped by kind, shaped with buildStakeFlow. The (netuid, event_kind) prefix of
 // idx_account_events_netuid_kind (migrations/0024) seeks the two stake kinds; the
-// observed_at window is a residual filter on that seek. Cold/absent D1 -> zeroed totals.
+// observed_at window is a residual filter on that seek. Returns { data, generatedAt }
+// where generatedAt is the newest event timestamp (epoch ms) in the window, so the
+// REST meta reports provenance tied to the account_events stream. Cold/absent D1 ->
+// zeroed totals + generatedAt null.
 export async function loadSubnetStakeFlow(
   d1,
   netuid,
@@ -88,10 +93,24 @@ export async function loadSubnetStakeFlow(
   const cutoff = Date.now() - days * DAY_MS;
   const rows = await d1(
     "SELECT event_kind, COALESCE(SUM(amount_tao), 0) AS total_tao, " +
-      "COUNT(*) AS event_count FROM account_events " +
+      "COUNT(*) AS event_count, MAX(observed_at) AS last_observed " +
+      "FROM account_events " +
       "WHERE netuid = ? AND event_kind IN (?, ?) AND observed_at >= ? " +
       "GROUP BY event_kind",
     [netuid, STAKE_ADDED_KIND, STAKE_REMOVED_KIND, cutoff],
   );
-  return buildStakeFlow(rows, netuid, { window: windowLabel });
+  let generatedAt = null;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const observed = Number(row?.last_observed);
+    if (
+      Number.isFinite(observed) &&
+      (generatedAt == null || observed > generatedAt)
+    ) {
+      generatedAt = observed;
+    }
+  }
+  return {
+    data: buildStakeFlow(rows, netuid, { window: windowLabel }),
+    generatedAt,
+  };
 }

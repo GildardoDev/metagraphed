@@ -1361,13 +1361,26 @@ describe("handleSubnetStakeFlow", () => {
       body.meta.artifact_path,
       `/metagraph/subnets/${NETUID}/stake-flow.json`,
     );
+    // account_events provenance, not the metagraph snapshot; null on a cold store.
+    assert.equal(body.meta.source, "chain-events");
+    assert.equal(body.meta.generated_at, null);
   });
 
   test("sums StakeAdded vs StakeRemoved into net flow, bound to the netuid + both kinds", async () => {
     const { env, captures } = dbWith({
       stakeFlow: [
-        { event_kind: "StakeAdded", total_tao: 200, event_count: 5 },
-        { event_kind: "StakeRemoved", total_tao: 50, event_count: 2 },
+        {
+          event_kind: "StakeAdded",
+          total_tao: 200,
+          event_count: 5,
+          last_observed: 1717000000000,
+        },
+        {
+          event_kind: "StakeRemoved",
+          total_tao: 50,
+          event_count: 2,
+          last_observed: 1717900000000,
+        },
       ],
     });
     const body = await json(
@@ -1393,6 +1406,9 @@ describe("handleSubnetStakeFlow", () => {
     assert.equal(captures.params[idx][0], NETUID);
     assert.equal(captures.params[idx][1], "StakeAdded");
     assert.equal(captures.params[idx][2], "StakeRemoved");
+    // Provenance: account_events source + generated_at = newest event in the window.
+    assert.equal(body.meta.source, "chain-events");
+    assert.equal(body.meta.generated_at, 1717900000000);
   });
 
   describe("canonicalSubnetStakeFlowCachePath", () => {
