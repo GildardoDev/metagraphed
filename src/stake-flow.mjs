@@ -28,6 +28,7 @@ export const DEFAULT_STAKE_FLOW_WINDOW = "30d";
 // unit (the same rounding the turnover/account-summary scorecards apply).
 const RAO_PER_TAO = 1e9;
 function roundTao(value) {
+  /* v8 ignore next -- defensive: callers only pass finite toNumber-guarded sums */
   if (!Number.isFinite(value)) return 0;
   return Math.round(value * RAO_PER_TAO) / RAO_PER_TAO;
 }

@@ -1433,6 +1433,13 @@ describe("handleSubnetStakeFlow", () => {
       );
       assert.equal(path, "/api/v1/subnets/7/stake-flow?window=bogus");
     });
+
+    test("passes an unsupported query param through unchanged (validation error)", () => {
+      const path = canonicalSubnetStakeFlowCachePath(
+        new URL("https://api.metagraph.sh/api/v1/subnets/7/stake-flow?bogus=1"),
+      );
+      assert.equal(path, "/api/v1/subnets/7/stake-flow?bogus=1");
+    });
   });
 });
 

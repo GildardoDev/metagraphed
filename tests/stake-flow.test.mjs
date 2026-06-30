@@ -171,4 +171,34 @@ describe("loadSubnetStakeFlow", () => {
     assert.equal(data.window, "7d");
     assert.equal(generatedAt, null);
   });
+
+  test("a non-array D1 result degrades to zeroed totals and null generated_at", async () => {
+    const d1 = async () => null;
+    const { data, generatedAt } = await loadSubnetStakeFlow(d1, 7, {});
+    assert.equal(data.total_staked_tao, 0);
+    assert.equal(data.net_flow_tao, 0);
+    assert.equal(generatedAt, null);
+  });
+
+  test("a row without a finite observed_at leaves generated_at null", async () => {
+    const d1 = async () => [
+      { event_kind: STAKE_ADDED_KIND, total_tao: 5, event_count: 1 },
+    ];
+    const { data, generatedAt } = await loadSubnetStakeFlow(d1, 7, {});
+    assert.equal(data.total_staked_tao, 5);
+    assert.equal(generatedAt, null);
+  });
+
+  test("an unknown window label falls back to the default cutoff", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:00:00.000Z"));
+    let captured;
+    const d1 = async (_sql, params) => {
+      captured = params;
+      return [];
+    };
+    await loadSubnetStakeFlow(d1, 7, { windowLabel: "bogus" });
+    assert.equal(captured[3], Date.now() - STAKE_FLOW_WINDOWS["30d"] * DAY_MS);
+    vi.useRealTimers();
+  });
 });
