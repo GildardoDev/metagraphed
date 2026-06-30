@@ -2,7 +2,7 @@ import { artifactStorageTierForPath } from "./artifact-storage.mjs";
 import { DOMAIN_TAGS } from "./domain-tags.mjs";
 import { sampleFromSchema } from "./openapi-sample.mjs";
 
-export const CONTRACT_VERSION = "2026-06-30.6";
+export const CONTRACT_VERSION = "2026-06-30.7";
 export const SCHEMA_VERSION = 1;
 // The API + artifacts are served from the api subdomain; the bare apex
 // (metagraph.sh) is the metagraphed-ui UI. PRIMARY_DOMAIN drives the OpenAPI
@@ -941,6 +941,12 @@ export const PUBLIC_ARTIFACTS = [
     "SubnetTurnoverArtifact",
   ),
   artifact(
+    "subnet-stake-flow",
+    "/metagraph/subnets/{netuid}/stake-flow.json",
+    "Net stake flow for one subnet over a recent window (7d/30d/90d): total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and event counts, summed live from the account_events stream at /api/v1/subnets/{netuid}/stake-flow (no static file).",
+    "SubnetStakeFlowArtifact",
+  ),
+  artifact(
     "subnet-metagraph",
     "/metagraph/subnets/{netuid}/metagraph.json",
     "Per-UID metagraph (stake, trust, consensus, incentive, dividends, emission, validator_permit, rank, axon) for one subnet, served live from the neurons D1 tier at /api/v1/subnets/{netuid}/metagraph (no static file).",
@@ -1747,6 +1753,22 @@ export const API_ROUTES = [
         schema: { type: "string", enum: ["7d", "30d", "90d", "1y", "all"] },
       },
       { name: "changes", schema: { type: "string", enum: ["true"] } },
+    ],
+    [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
+  ),
+  route(
+    "subnet-stake-flow",
+    "GET",
+    "/api/v1/subnets/{netuid}/stake-flow",
+    "/metagraph/subnets/{netuid}/stake-flow.json",
+    "Fetch net stake flow for one subnet over a recent window: total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and the stake/unstake event counts, summed live from the account_events stream. Windows (7d/30d/90d) are bounded by the account_events retention.",
+    "short",
+    ["subnets", "analytics"],
+    [
+      {
+        name: "window",
+        schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
     ],
     [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
   ),

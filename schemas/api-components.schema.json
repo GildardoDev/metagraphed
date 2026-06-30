@@ -13103,6 +13103,59 @@
           }
         ]
       },
+      "SubnetStakeFlowArtifact": {
+        "additionalProperties": false,
+        "description": "Net stake flow for one subnet over a recent window, summed live from the account_events stream: TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net, and event counts.",
+        "properties": {
+          "net_flow_tao": {
+            "type": "number"
+          },
+          "netuid": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "schema_version": {
+            "type": "integer"
+          },
+          "stake_events": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total_staked_tao": {
+            "type": "number"
+          },
+          "total_unstaked_tao": {
+            "type": "number"
+          },
+          "unstake_events": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "window": {
+            "enum": [
+              "7d",
+              "30d",
+              "90d",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "netuid",
+          "window",
+          "total_staked_tao",
+          "total_unstaked_tao",
+          "net_flow_tao",
+          "stake_events",
+          "unstake_events"
+        ],
+        "type": "object"
+      },
       "SubnetStatus": {
         "enum": [
           "active",

@@ -40,6 +40,8 @@ export const R2_ONLY_PATTERNS = [
   /^subnets\/(?:\d+|\{netuid\})\/concentration\/history\.json$/,
   // Validator-set / registration turnover: computed live from neuron_daily.
   /^subnets\/(?:\d+|\{netuid\})\/turnover\.json$/,
+  // Net stake flow: computed live from account_events.
+  /^subnets\/(?:\d+|\{netuid\})\/stake-flow\.json$/,
   // Per-UID metagraph (#1303/#1304/#1305): computed live from the neurons D1
   // tier at /api/v1/subnets/{netuid}/metagraph, /neurons/{uid}, /validators —
   // never written as files.
