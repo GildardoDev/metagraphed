@@ -1143,7 +1143,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "chain-concentration",
     "/metagraph/chain/concentration.json",
-    "Network-wide stake & emission concentration metrics (Gini, HHI, Nakamoto coefficient, top-percentile shares, entropy) aggregated across EVERY subnet's neurons — per-UID, per-entity (coldkeys collapsed across subnets to the true network control distribution), and validator-only consensus power — computed live from the neurons D1 tier at /api/v1/chain/concentration (no static file).",
+    "Network-wide stake and emission concentration metrics (Gini, HHI, Nakamoto coefficient, top-percentile shares, entropy) aggregated across all subnets' neurons over three lenses (per-UID, per-entity with coldkeys collapsed across subnets into the network control distribution, and validator-only consensus power), computed live from the neurons D1 tier at /api/v1/chain/concentration (no static file).",
     "ChainConcentrationArtifact",
   ),
   artifact(
@@ -2335,7 +2335,7 @@ export const API_ROUTES = [
     "GET",
     "/api/v1/chain/concentration",
     "/metagraph/chain/concentration.json",
-    "Fetch network-wide stake & emission concentration metrics (Gini, HHI, Nakamoto coefficient, top-percentile shares, entropy) aggregated across every subnet's neurons — per-UID, per-entity (coldkeys collapsed across subnets to the true network control distribution), and validator-only consensus power. Computed live from the neurons D1 tier; schema-stable nulls when cold.",
+    "Fetch network-wide stake and emission concentration metrics (Gini, HHI, Nakamoto coefficient, top-percentile shares, entropy) aggregated across all subnets' neurons over three lenses (per-UID, per-entity with coldkeys collapsed across subnets into the network control distribution, and validator-only consensus power), computed live from the neurons D1 tier; schema-stable nulls when cold.",
     "short",
     ["chain", "analytics"],
     [],

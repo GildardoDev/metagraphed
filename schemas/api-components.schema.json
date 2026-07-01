@@ -2804,7 +2804,7 @@
       },
       "ChainConcentrationArtifact": {
         "additionalProperties": true,
-        "description": "Network-wide stake & emission concentration / decentralization metrics aggregated across EVERY subnet's neurons, computed live from the neurons D1 tier across three lenses: per-UID (stake/emission), per-entity (entity_stake/entity_emission — coldkeys collapsed ACROSS subnets so an operator's many hotkeys network-wide count as one holder, the true network control distribution), and validator-only consensus power (validator_stake). subnet_count reports how many subnets the snapshot spans.",
+        "description": "Network-wide stake and emission concentration metrics aggregated across all subnets' neurons, computed live from the neurons D1 tier across three lenses: per-UID (stake, emission), per-entity (entity_stake, entity_emission, with coldkeys collapsed across subnets into the network-level control distribution), and validator-only consensus power (validator_stake). subnet_count reports how many subnets the snapshot spans; every lens and stamp field is always present as a value or null.",
         "properties": {
           "captured_at": {
             "type": [
@@ -2813,245 +2813,17 @@
             ]
           },
           "emission": {
-            "additionalProperties": true,
-            "properties": {
-              "entropy": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "entropy_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "gini": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "holders": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "nakamoto_coefficient": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "top_10pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_1pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_20pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_5pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "total": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              }
-            },
-            "type": [
-              "object",
-              "null"
-            ]
+            "$ref": "#/components/schemas/ConcentrationMetrics"
           },
           "entity_count": {
             "minimum": 0,
             "type": "integer"
           },
           "entity_emission": {
-            "additionalProperties": true,
-            "properties": {
-              "entropy": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "entropy_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "gini": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "holders": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "nakamoto_coefficient": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "top_10pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_1pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_20pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_5pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "total": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              }
-            },
-            "type": [
-              "object",
-              "null"
-            ]
+            "$ref": "#/components/schemas/ConcentrationMetrics"
           },
           "entity_stake": {
-            "additionalProperties": true,
-            "properties": {
-              "entropy": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "entropy_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "gini": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "holders": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "nakamoto_coefficient": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "top_10pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_1pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_20pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_5pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "total": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              }
-            },
-            "type": [
-              "object",
-              "null"
-            ]
+            "$ref": "#/components/schemas/ConcentrationMetrics"
           },
           "neuron_count": {
             "minimum": 0,
@@ -3061,83 +2833,7 @@
             "type": "integer"
           },
           "stake": {
-            "additionalProperties": true,
-            "properties": {
-              "entropy": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "entropy_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "gini": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "holders": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "nakamoto_coefficient": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "top_10pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_1pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_20pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_5pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "total": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              }
-            },
-            "type": [
-              "object",
-              "null"
-            ]
+            "$ref": "#/components/schemas/ConcentrationMetrics"
           },
           "subnet_count": {
             "minimum": 0,
@@ -3150,83 +2846,7 @@
             ]
           },
           "validator_stake": {
-            "additionalProperties": true,
-            "properties": {
-              "entropy": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "entropy_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "gini": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hhi_normalized": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "holders": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "nakamoto_coefficient": {
-                "type": [
-                  "integer",
-                  "null"
-                ]
-              },
-              "top_10pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_1pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_20pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "top_5pct_share": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "total": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              }
-            },
-            "type": [
-              "object",
-              "null"
-            ]
+            "$ref": "#/components/schemas/ConcentrationMetrics"
           }
         },
         "required": [
@@ -3234,8 +2854,13 @@
           "subnet_count",
           "neuron_count",
           "entity_count",
+          "uids_per_entity",
+          "captured_at",
           "stake",
-          "emission"
+          "emission",
+          "entity_stake",
+          "entity_emission",
+          "validator_stake"
         ],
         "type": "object"
       },
@@ -4018,6 +3643,86 @@
           "found"
         ],
         "type": "object"
+      },
+      "ConcentrationMetrics": {
+        "additionalProperties": true,
+        "description": "One concentration lens over a single value distribution: holder count, total, and the Gini, HHI (raw and holder-count-normalized), Nakamoto coefficient, top-percentile cumulative shares, and Shannon entropy (raw and normalized) measures. Null when the distribution is empty (a cold store or an all-zero column).",
+        "properties": {
+          "entropy": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "entropy_normalized": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "gini": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "hhi": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "hhi_normalized": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "holders": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nakamoto_coefficient": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "top_10pct_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "top_1pct_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "top_20pct_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "top_5pct_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "total": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "type": [
+          "object",
+          "null"
+        ]
       },
       "ContractsArtifact": {
         "allOf": [

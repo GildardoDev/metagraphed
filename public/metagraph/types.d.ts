@@ -436,7 +436,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fetch network-wide stake & emission concentration metrics (Gini, HHI, Nakamoto coefficient, top-percentile shares, entropy) aggregated across every subnet's neurons — per-UID, per-entity (coldkeys collapsed across subnets to the true network control distribution), and validator-only consensus power. Computed live from the neurons D1 tier; schema-stable nulls when cold. */
+        /** Fetch network-wide stake and emission concentration metrics (Gini, HHI, Nakamoto coefficient, top-percentile shares, entropy) aggregated across all subnets' neurons over three lenses (per-UID, per-entity with coldkeys collapsed across subnets into the network control distribution, and validator-only consensus power), computed live from the neurons D1 tier; schema-stable nulls when cold. */
         get: operations["chainConcentration"];
         put?: never;
         post?: never;
@@ -2461,94 +2461,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** @description Network-wide stake & emission concentration / decentralization metrics aggregated across EVERY subnet's neurons, computed live from the neurons D1 tier across three lenses: per-UID (stake/emission), per-entity (entity_stake/entity_emission — coldkeys collapsed ACROSS subnets so an operator's many hotkeys network-wide count as one holder, the true network control distribution), and validator-only consensus power (validator_stake). subnet_count reports how many subnets the snapshot spans. */
+        /** @description Network-wide stake and emission concentration metrics aggregated across all subnets' neurons, computed live from the neurons D1 tier across three lenses: per-UID (stake, emission), per-entity (entity_stake, entity_emission, with coldkeys collapsed across subnets into the network-level control distribution), and validator-only consensus power (validator_stake). subnet_count reports how many subnets the snapshot spans; every lens and stamp field is always present as a value or null. */
         ChainConcentrationArtifact: {
-            captured_at?: string | null;
-            emission: ({
-                entropy?: number | null;
-                entropy_normalized?: number | null;
-                gini?: number | null;
-                hhi?: number | null;
-                hhi_normalized?: number | null;
-                holders?: number;
-                nakamoto_coefficient?: number | null;
-                top_10pct_share?: number | null;
-                top_1pct_share?: number | null;
-                top_20pct_share?: number | null;
-                top_5pct_share?: number | null;
-                total?: number | null;
-            } & {
-                [key: string]: unknown;
-            }) | null;
+            captured_at: string | null;
+            emission: components["schemas"]["ConcentrationMetrics"];
             entity_count: number;
-            entity_emission?: ({
-                entropy?: number | null;
-                entropy_normalized?: number | null;
-                gini?: number | null;
-                hhi?: number | null;
-                hhi_normalized?: number | null;
-                holders?: number;
-                nakamoto_coefficient?: number | null;
-                top_10pct_share?: number | null;
-                top_1pct_share?: number | null;
-                top_20pct_share?: number | null;
-                top_5pct_share?: number | null;
-                total?: number | null;
-            } & {
-                [key: string]: unknown;
-            }) | null;
-            entity_stake?: ({
-                entropy?: number | null;
-                entropy_normalized?: number | null;
-                gini?: number | null;
-                hhi?: number | null;
-                hhi_normalized?: number | null;
-                holders?: number;
-                nakamoto_coefficient?: number | null;
-                top_10pct_share?: number | null;
-                top_1pct_share?: number | null;
-                top_20pct_share?: number | null;
-                top_5pct_share?: number | null;
-                total?: number | null;
-            } & {
-                [key: string]: unknown;
-            }) | null;
+            entity_emission: components["schemas"]["ConcentrationMetrics"];
+            entity_stake: components["schemas"]["ConcentrationMetrics"];
             neuron_count: number;
             schema_version: number;
-            stake: ({
-                entropy?: number | null;
-                entropy_normalized?: number | null;
-                gini?: number | null;
-                hhi?: number | null;
-                hhi_normalized?: number | null;
-                holders?: number;
-                nakamoto_coefficient?: number | null;
-                top_10pct_share?: number | null;
-                top_1pct_share?: number | null;
-                top_20pct_share?: number | null;
-                top_5pct_share?: number | null;
-                total?: number | null;
-            } & {
-                [key: string]: unknown;
-            }) | null;
+            stake: components["schemas"]["ConcentrationMetrics"];
             subnet_count: number;
-            uids_per_entity?: number | null;
-            validator_stake?: ({
-                entropy?: number | null;
-                entropy_normalized?: number | null;
-                gini?: number | null;
-                hhi?: number | null;
-                hhi_normalized?: number | null;
-                holders?: number;
-                nakamoto_coefficient?: number | null;
-                top_10pct_share?: number | null;
-                top_1pct_share?: number | null;
-                top_20pct_share?: number | null;
-                top_5pct_share?: number | null;
-                total?: number | null;
-            } & {
-                [key: string]: unknown;
-            }) | null;
+            uids_per_entity: number | null;
+            validator_stake: components["schemas"]["ConcentrationMetrics"];
         } & {
             [key: string]: unknown;
         };
@@ -2728,6 +2653,23 @@ export interface components {
                 surface_count?: number;
             } | null;
         };
+        /** @description One concentration lens over a single value distribution: holder count, total, and the Gini, HHI (raw and holder-count-normalized), Nakamoto coefficient, top-percentile cumulative shares, and Shannon entropy (raw and normalized) measures. Null when the distribution is empty (a cold store or an all-zero column). */
+        ConcentrationMetrics: ({
+            entropy?: number | null;
+            entropy_normalized?: number | null;
+            gini?: number | null;
+            hhi?: number | null;
+            hhi_normalized?: number | null;
+            holders?: number;
+            nakamoto_coefficient?: number | null;
+            top_10pct_share?: number | null;
+            top_1pct_share?: number | null;
+            top_20pct_share?: number | null;
+            top_5pct_share?: number | null;
+            total?: number | null;
+        } & {
+            [key: string]: unknown;
+        }) | null;
         ContractsArtifact: components["schemas"]["ArtifactBase"] & ({
             artifacts: components["schemas"]["ArtifactContractEntry"][];
             /** @constant */
