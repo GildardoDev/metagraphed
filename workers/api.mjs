@@ -77,6 +77,7 @@ import {
   handleSubnetYield,
   handleSubnetMovers,
   canonicalSubnetMoversCachePath,
+  handleGlobalValidators,
   canonicalSubnetMetagraphCachePath,
   handleAccount,
   handleAccountHistory,
@@ -1153,6 +1154,12 @@ export async function handleRequest(request, env = {}, ctx = {}) {
     );
   }
 
+  // Global validator/operator leaderboard from the current neurons snapshot. Exact path,
+  // dispatched before subnet routing so the top-level collection stays unambiguous.
+  if (url.pathname === "/api/v1/validators") {
+    return handleGlobalValidators(request, env, url);
+  }
+
   // Cross-subnet movers leaderboard (exact path, dispatched before subnet-slug
   // resolution so "movers" is never treated as a slug): every subnet ranked by its
   // stake/emission/validator change over the window, from the neuron_daily rollup.
@@ -1641,6 +1648,7 @@ function isMainnetOnlyApiPath(pathname) {
     pathname === "/api/v1/ask" ||
     pathname === "/api/v1/graphql" ||
     pathname === "/api/v1/search/semantic" ||
+    pathname === "/api/v1/validators" ||
     pathname === "/api/v1/registry/leaderboards" ||
     pathname === "/api/v1/compare" ||
     pathname === "/api/v1/subnets/movers" ||
