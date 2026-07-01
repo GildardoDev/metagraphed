@@ -44,6 +44,8 @@ export const R2_ONLY_PATTERNS = [
   /^subnets\/(?:\d+|\{netuid\})\/turnover\.json$/,
   // Net stake flow: computed live from account_events.
   /^subnets\/(?:\d+|\{netuid\})\/stake-flow\.json$/,
+  // Per-UID emission yield distribution: computed live from the neurons snapshot.
+  /^subnets\/(?:\d+|\{netuid\})\/yield\.json$/,
   // Cross-subnet movers leaderboard: computed live from neuron_daily.
   /^subnets\/movers\.json$/,
   // Per-UID metagraph (#1303/#1304/#1305): computed live from the neurons D1
@@ -92,7 +94,6 @@ export const R2_ONLY_PATTERNS = [
   /^chain\/calls\.json$/,
   /^chain\/signers\.json$/,
   /^chain\/fees\.json$/,
-  /^chain\/transfers\.json$/,
   /^chain\/transfers\.json$/,
   // Postgres-backed all-events tier (ADR 0013): the recent-events feed, the
   // per-block all-events list, and the activity-stats aggregate are served live
