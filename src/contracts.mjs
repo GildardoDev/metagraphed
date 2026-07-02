@@ -947,7 +947,7 @@ export const PUBLIC_ARTIFACTS = [
   artifact(
     "subnet-stake-flow",
     "/metagraph/subnets/{netuid}/stake-flow.json",
-    "Net stake flow for one subnet over a recent window (7d/30d/90d): total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and event counts, summed live from the account_events stream at /api/v1/subnets/{netuid}/stake-flow (no static file).",
+    "Net stake flow for one subnet over a recent window (7d/30d/90d): total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and event counts, with optional ?direction=all|in|out to filter inflow or outflow only, summed live from the account_events stream at /api/v1/subnets/{netuid}/stake-flow (no static file).",
     "SubnetStakeFlowArtifact",
   ),
   artifact(
@@ -1807,13 +1807,17 @@ export const API_ROUTES = [
     "GET",
     "/api/v1/subnets/{netuid}/stake-flow",
     "/metagraph/subnets/{netuid}/stake-flow.json",
-    "Fetch net stake flow for one subnet over a recent window: total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and the stake/unstake event counts, summed live from the account_events stream. Windows (7d/30d/90d) are bounded by the account_events retention.",
+    "Fetch net stake flow for one subnet over a recent window: total TAO staked (StakeAdded) vs unstaked (StakeRemoved), the net flow, and the stake/unstake event counts, summed live from the account_events stream. ?direction=all|in|out filters to inflow (StakeAdded) or outflow (StakeRemoved) only; omitted defaults to all. Windows (7d/30d/90d) are bounded by the account_events retention.",
     "short",
     ["subnets", "analytics"],
     [
       {
         name: "window",
         schema: { type: "string", enum: ["7d", "30d", "90d"] },
+      },
+      {
+        name: "direction",
+        schema: { type: "string", enum: ["all", "in", "out"] },
       },
     ],
     [{ name: "netuid", schema: { type: "integer", minimum: 0 } }],
